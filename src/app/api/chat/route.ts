@@ -1,5 +1,5 @@
 import { generateText } from 'ai';
-import { google } from '@ai-sdk/google';
+import { groq } from '@ai-sdk/groq';
 
 export async function POST(req: Request) {
   try {
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     }));
 
     const result = await generateText({
-      model: google('gemini-3.5-flash'),
+      model: groq('llama-3.1-8b-instant'),
       messages: formattedMessages,
     });
 

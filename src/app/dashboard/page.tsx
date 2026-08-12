@@ -24,13 +24,14 @@ export default function DashboardHome() {
           supabase.from('chats').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id),
           supabase.from('interviews').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id),
           supabase.from('resumes').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id),
-          (supabase.from('profiles').select('total_chats_created, time_spent_seconds').eq('id', session.user.id).single() as any),
+          (supabase.from('profiles').select('total_chats_created, total_interviews, time_spent_seconds').eq('id', session.user.id).single() as any),
           supabase.from('chats').select('id, title, updated_at').eq('user_id', session.user.id).order('updated_at', { ascending: false }).limit(5)
         ])
         
         let actualChatsInDB = chatsCount.count || 0
         let profileChatCount = profileData.data?.total_chats_created || 0
         let timeSpentSeconds = profileData.data?.time_spent_seconds || 0
+        let profileInterviewCount = profileData.data?.total_interviews || 0
 
         if (profileData.error && profileData.error.code === 'PGRST116') {
           // Profile doesn't exist, create it
@@ -42,10 +43,11 @@ export default function DashboardHome() {
         }
 
         const allTimeChats = Math.max(actualChatsInDB, profileChatCount)
+        const allTimeInterviews = Math.max(interviewsCount.count || 0, profileInterviewCount)
 
         setStats({
           chats: allTimeChats,
-          interviews: interviewsCount.count || 0,
+          interviews: allTimeInterviews,
           resumes: resumesCount.count || 0,
           hoursSpent: Number((timeSpentSeconds / 3600).toFixed(1)),
         })

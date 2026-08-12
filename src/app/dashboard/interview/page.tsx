@@ -3,8 +3,8 @@
 import * as React from "react"
 import { Button } from "@/components/ui/Button"
 import { GlassPanel } from "@/components/ui/GlassPanel"
-import { Play, RotateCcw, Award, CheckCircle2, ChevronRight, Video, Mic, Volume2, HelpCircle } from "lucide-react"
-
+import { Play, RotateCcw, Award, CheckCircle2, ChevronRight, Video, Mic, Volume2, Loader2, History, X } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 type InterviewMode = "text" | "video" | "voice"
 
 interface Question {
@@ -12,11 +12,26 @@ interface Question {
   text: string;
 }
 
-const initialQuestions: Question[] = [
-  { id: 1, text: "Can you tell me about a complex technical challenge you solved recently?" },
-  { id: 2, text: "How do you handle disagreement with a product manager or team lead?" },
-  { id: 3, text: "Explain how you would design a rate limiter for a high-traffic API." }
-]
+interface EvaluationMetrics {
+  vocabulary: number;
+  confidence: number;
+  grammar: number;
+  logic: number;
+  hireability: number;
+}
+
+interface Feedback {
+  overallScore: number;
+  review: string;
+  metrics: EvaluationMetrics;
+}
+
+interface TranscriptEntry {
+  question: string;
+  answer: string;
+}
+
+const initialQuestions: Question[] = []
 
 export default function InterviewPage() {
   const [mode, setMode] = React.useState<InterviewMode>("text")
@@ -26,7 +41,30 @@ export default function InterviewPage() {
   const [response, setResponse] = React.useState("")
   const [completed, setCompleted] = React.useState(false)
   const [evaluating, setEvaluating] = React.useState(false)
-  const [feedback, setFeedback] = React.useState<{ score: number; review: string } | null>(null)
+  const [feedback, setFeedback] = React.useState<Feedback | null>(null)
+  const [transcript, setTranscript] = React.useState<TranscriptEntry[]>([])
+
+  // History State
+  const [showHistory, setShowHistory] = React.useState(false)
+  const [historyItems, setHistoryItems] = React.useState<any[]>([])
+  const [loadingHistory, setLoadingHistory] = React.useState(false)
+  const [selectedHistory, setSelectedHistory] = React.useState<any | null>(null)
+
+  const fetchHistory = async () => {
+    setLoadingHistory(true)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user) {
+      const { data } = await supabase.from('interviews').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false })
+      if (data) setHistoryItems(data)
+    }
+    setLoadingHistory(false)
+  }
+
+  React.useEffect(() => {
+    if (showHistory && historyItems.length === 0) {
+      fetchHistory()
+    }
+  }, [showHistory])
 
   // Video Mode State
   const [recording, setRecording] = React.useState(false)
@@ -36,7 +74,14 @@ export default function InterviewPage() {
   // Text-To-Speech / Dynamic Voice Mode State
   const [speaking, setSpeaking] = React.useState(false)
   const [listening, setListening] = React.useState(false)
+  const [speechError, setSpeechError] = React.useState<string | null>(null)
   const recognitionRef = React.useRef<any>(null)
+  
+  // Dynamic Generation State
+  const [topic, setTopic] = React.useState("")
+  const [numQuestions, setNumQuestions] = React.useState<number>(5)
+  const [generating, setGenerating] = React.useState(false)
+  const [generatingFollowUp, setGeneratingFollowUp] = React.useState(false)
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -61,6 +106,11 @@ export default function InterviewPage() {
         
         recognitionRef.current.onerror = (event: any) => {
           console.error("Speech recognition error", event.error)
+          if (event.error === 'network') {
+            setSpeechError("Browser speech recognition failed (network error). Please check your connection or switch to Text mode.")
+          } else {
+            setSpeechError(`Microphone error: ${event.error}`)
+          }
           setListening(false)
         }
         recognitionRef.current.onend = () => {
@@ -72,10 +122,12 @@ export default function InterviewPage() {
       if (recognitionRef.current) {
         recognitionRef.current.stop()
       }
+      stopTTS()
     }
   }, [])
 
   const toggleListening = () => {
+    setSpeechError(null)
     if (listening) {
       recognitionRef.current?.stop()
       setListening(false)
@@ -86,6 +138,13 @@ export default function InterviewPage() {
       } catch (err) {
         console.error(err)
       }
+    }
+  }
+
+  const stopTTS = () => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel()
+      setSpeaking(false)
     }
   }
 
@@ -102,10 +161,10 @@ export default function InterviewPage() {
 
   // Effect to read questions aloud automatically in voice mode
   React.useEffect(() => {
-    if (started && mode === "voice" && questions[currentIdx]) {
+    if (started && mode === "voice" && questions[currentIdx] && !generatingFollowUp && !evaluating) {
       speakQuestion(questions[currentIdx].text)
     }
-  }, [started, currentIdx, mode, questions])
+  }, [started, currentIdx, mode, questions, generatingFollowUp, evaluating])
 
   // Clean up media streams on unmount
   React.useEffect(() => {
@@ -113,6 +172,7 @@ export default function InterviewPage() {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop())
       }
+      stopTTS()
     }
   }, [])
 
@@ -139,66 +199,159 @@ export default function InterviewPage() {
   }
 
   const handleStart = async () => {
+    if (!topic.trim()) {
+      alert("Please enter an interview topic or role to continue.");
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const res = await fetch('/api/interview/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, numQuestions })
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || "Failed to generate questions");
+      
+      if (data.questions && data.questions.length > 0) {
+        setQuestions(data.questions);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(`Failed to generate dynamic questions: ${err.message}`);
+      setGenerating(false);
+      return;
+    } finally {
+      setGenerating(false);
+    }
+
     setStarted(true)
-    if (mode === "video") {
+    if (mode === "video" || mode === "voice") {
       await startCamera()
     }
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop()
       setListening(false)
     }
+    stopTTS()
+
     const userAns = response.trim()
+    const currentQ = questions[currentIdx].text
     
+    // Update transcript
+    const updatedTranscript = [...transcript, { question: currentQ, answer: userAns }]
+    setTranscript(updatedTranscript)
+    setResponse("")
+
     // Dynamic Follow-Up Question Generation for Voice Mode
     if (mode === "voice" && currentIdx < questions.length - 1) {
-      // Inject dynamic follow-up question based on user response
-      const updatedQuestions = [...questions]
-      const followUpText = `Interesting explanation. You mentioned "${userAns.slice(0, 30)}...". How did you verify or measure the performance of that specific choice?`
-      
-      // Insert dynamic follow-up right after current question
-      updatedQuestions.splice(currentIdx + 1, 0, {
-        id: Date.now(),
-        text: followUpText
-      })
-      setQuestions(updatedQuestions)
+      setGeneratingFollowUp(true)
+      try {
+        const res = await fetch('/api/interview/followup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic, question: currentQ, answer: userAns })
+        })
+        const data = await res.json()
+        if (data.question) {
+          const updatedQuestions = [...questions]
+          updatedQuestions.splice(currentIdx + 1, 1, {
+            id: Date.now(),
+            text: data.question
+          })
+          setQuestions(updatedQuestions)
+        }
+      } catch (err) {
+        console.error("Failed to generate follow up", err)
+      } finally {
+        setGeneratingFollowUp(false)
+      }
     }
 
     if (currentIdx < questions.length - 1) {
       setCurrentIdx((prev) => prev + 1)
-      setResponse("")
     } else {
       setEvaluating(true)
-      if (mode === "video") {
+      if (mode === "video" || mode === "voice") {
         stopCamera()
       }
-      // Mock evaluation duration
-      setTimeout(() => {
+      
+      try {
+        const res = await fetch('/api/interview/evaluate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic, transcript: updatedTranscript })
+        })
+        const data = await res.json()
+        setFeedback(data)
+
+        // Save to DB
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user && data.overallScore) {
+          const { error: insertError } = await supabase.from('interviews').insert({
+            user_id: session.user.id,
+            topic: topic,
+            mode: mode,
+            num_questions: questions.length,
+            overall_score: data.overallScore,
+            metrics: data.metrics,
+            transcript: updatedTranscript
+          })
+          if (insertError) {
+            console.error("Supabase Insert Error:", insertError);
+            alert("Failed to save interview to database: " + insertError.message);
+          }
+        }
+      } catch (err) {
+        console.error(err)
+        setFeedback({
+          overallScore: 0,
+          review: "Evaluation failed. The server was unable to generate your results.",
+          metrics: { vocabulary: 0, confidence: 0, grammar: 0, logic: 0, hireability: 0 }
+        })
+      } finally {
         setEvaluating(false)
         setCompleted(true)
-        setFeedback({
-          score: 88,
-          review: `Successfully completed in ${mode.toUpperCase()} mode. Excellent response structure. Your explanation showed depth, and your verbal indicators matched expectations. Suggestions: structure complex architecture steps more logically.`
-        })
-      }, 1500)
+      }
     }
   }
 
   const restart = () => {
     stopCamera()
+    stopTTS()
     if (recognitionRef.current) {
       recognitionRef.current.stop()
       setListening(false)
     }
     setStarted(false)
     setCurrentIdx(0)
-    setQuestions(initialQuestions)
+    setQuestions([])
+    setTranscript([])
     setResponse("")
     setCompleted(false)
     setFeedback(null)
   }
+
+  // Helper to render metric progress bar
+  const MetricBar = ({ label, score }: { label: string, score: number }) => (
+    <div className="space-y-1.5">
+      <div className="flex justify-between text-xs">
+        <span className="text-neutral-300">{label}</span>
+        <span className="font-bold text-white">{score}%</span>
+      </div>
+      <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+        <div 
+          className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-out"
+          style={{ width: `${score}%` }}
+        />
+      </div>
+    </div>
+  )
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -207,55 +360,58 @@ export default function InterviewPage() {
           <h1 className="text-2xl font-bold tracking-tight text-white">AI Interview Simulator</h1>
           <p className="text-xs text-neutral-400">Practice your technical and behavioral responses in real-time.</p>
         </div>
+        <Button onClick={() => setShowHistory(true)} variant="secondary" className="flex items-center gap-2">
+          <History className="w-4 h-4" /> Past Interviews
+        </Button>
       </div>
 
       {!started && !completed && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Mode Selector Cards */}
-          <div className="md:col-span-1 space-y-3">
-            <h3 className="text-xs font-semibold text-neutral-400">Select Mode</h3>
+          <div className="md:col-span-1 space-y-4">
+            <h3 className="text-sm font-semibold text-neutral-400 mb-2">Select Mode</h3>
             <button
               onClick={() => setMode("text")}
-              className={`w-full p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
+              className={`w-full p-4 rounded-xl border text-left flex items-start gap-4 transition-all ${
                 mode === "text"
                   ? "bg-white/10 border-blue-500 text-white"
                   : "bg-white/5 border-white/5 text-neutral-400 hover:border-white/10"
               }`}
             >
               <Award className="w-5 h-5 mt-0.5" />
-              <div>
-                <span className="block text-xs font-bold text-white">1. Text Input</span>
-                <span className="text-[10px] text-neutral-400">Read questions and type answers directly.</span>
+              <div className="space-y-1">
+                <span className="block text-sm font-bold text-white">1. Text Input</span>
+                <span className="block text-xs text-neutral-400 leading-relaxed">Read questions and type answers directly.</span>
               </div>
             </button>
 
             <button
               onClick={() => setMode("video")}
-              className={`w-full p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
+              className={`w-full p-4 rounded-xl border text-left flex items-start gap-4 transition-all ${
                 mode === "video"
                   ? "bg-white/10 border-purple-500 text-white"
                   : "bg-white/5 border-white/5 text-neutral-400 hover:border-white/10"
               }`}
             >
               <Video className="w-5 h-5 mt-0.5" />
-              <div>
-                <span className="block text-xs font-bold text-white">2. Video & Audio</span>
-                <span className="text-[10px] text-neutral-400">Answer live using your camera and microphone.</span>
+              <div className="space-y-1">
+                <span className="block text-sm font-bold text-white">2. Video & Audio</span>
+                <span className="block text-xs text-neutral-400 leading-relaxed">Answer live using your camera and microphone.</span>
               </div>
             </button>
 
             <button
               onClick={() => setMode("voice")}
-              className={`w-full p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
+              className={`w-full p-4 rounded-xl border text-left flex items-start gap-4 transition-all ${
                 mode === "voice"
                   ? "bg-white/10 border-emerald-500 text-white"
                   : "bg-white/5 border-white/5 text-neutral-400 hover:border-white/10"
               }`}
             >
               <Mic className="w-5 h-5 mt-0.5" />
-              <div>
-                <span className="block text-xs font-bold text-white">3. TTS Dynamic Interview</span>
-                <span className="text-[10px] text-neutral-400">AI speaks aloud. Asks follow-ups based on your answers.</span>
+              <div className="space-y-1">
+                <span className="block text-sm font-bold text-white">3. TTS Dynamic Interview</span>
+                <span className="block text-xs text-neutral-400 leading-relaxed">AI speaks aloud. Asks follow-ups based on your answers.</span>
               </div>
             </button>
           </div>
@@ -268,16 +424,37 @@ export default function InterviewPage() {
                 {mode === "video" && <Video className="w-6 h-6 text-purple-400" />}
                 {mode === "voice" && <Mic className="w-6 h-6 text-emerald-400" />}
               </div>
-              <div className="max-w-xs space-y-2">
-                <h2 className="text-lg font-semibold">Ready to start?</h2>
-                <p className="text-xs text-neutral-400">
-                  {mode === "text" && "Answer questions through standard keyboard input."}
-                  {mode === "video" && "Requires camera and microphone permission."}
-                  {mode === "voice" && "Make sure your speakers are on. The AI will speak questions aloud."}
-                </p>
+              <div className="max-w-sm space-y-2 w-full text-left">
+                <h2 className="text-lg font-semibold text-center mb-6">Ready to start?</h2>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-medium text-neutral-400 block mb-1">Interview Topic / Role</label>
+                    <input 
+                      type="text" 
+                      value={topic}
+                      onChange={(e) => setTopic(e.target.value)}
+                      placeholder="e.g. Senior React Developer, HR Manager, System Design" 
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-xs font-medium text-neutral-400 block mb-1">Number of Questions</label>
+                    <input 
+                      type="number" 
+                      min="1"
+                      max="15"
+                      value={numQuestions}
+                      onChange={(e) => setNumQuestions(Number(e.target.value))}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
               </div>
-              <Button onClick={handleStart} variant="primary" className="rounded-xl px-6">
-                <Play className="w-4 h-4 mr-2" /> Start Simulator
+              <Button onClick={handleStart} variant="primary" className="rounded-xl px-6 mt-4" disabled={generating || !topic.trim()}>
+                {generating ? "Generating Questions..." : <><Play className="w-4 h-4 mr-2" /> Start Simulator</>}
               </Button>
             </GlassPanel>
           </div>
@@ -302,17 +479,23 @@ export default function InterviewPage() {
             <h2 className="text-base font-semibold text-white leading-relaxed flex items-center gap-2">
               {mode === "voice" && (
                 <button 
-                  onClick={() => speakQuestion(questions[currentIdx].text)}
+                  onClick={() => speakQuestion(questions[currentIdx]?.text)}
                   className={`p-1.5 rounded-lg border ${speaking ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 animate-pulse" : "bg-white/5 border-white/10 text-neutral-400"}`}
                 >
                   <Volume2 className="w-4 h-4" />
                 </button>
               )}
-              {questions[currentIdx].text}
+              {generatingFollowUp ? (
+                <span className="flex items-center text-neutral-400 italic">
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating follow-up question...
+                </span>
+              ) : (
+                questions[currentIdx]?.text
+              )}
             </h2>
 
             {/* Video Feed Screen */}
-            {mode === "video" && (
+            {(mode === "video" || mode === "voice") && (
               <div className="relative aspect-video max-w-md mx-auto bg-black rounded-xl overflow-hidden border border-white/10 shadow-inner">
                 <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
                 <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-red-600/90 text-white text-[9px] px-2 py-0.5 rounded-full font-bold uppercase animate-pulse">
@@ -346,8 +529,14 @@ export default function InterviewPage() {
               onChange={(e) => setResponse(e.target.value)}
               placeholder={mode === "voice" ? "Start speaking or type here..." : "Type your response here..."}
               rows={5}
-              className="w-full p-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent transition-all text-xs font-medium"
+              disabled={generatingFollowUp || evaluating}
+              className="w-full p-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent transition-all text-xs font-medium disabled:opacity-50"
             />
+            {speechError && (
+              <div className="text-red-400 text-[10px] mt-1 bg-red-500/10 p-2 rounded border border-red-500/20">
+                {speechError}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end">
@@ -355,49 +544,149 @@ export default function InterviewPage() {
               onClick={handleNext} 
               variant="primary" 
               className="rounded-xl text-xs py-2"
-              disabled={!response.trim() || evaluating}
+              disabled={!response.trim() || evaluating || generatingFollowUp}
             >
-              {evaluating ? "Evaluating..." : currentIdx === questions.length - 1 ? "Finish Interview" : "Submit Answer"} 
-              {!evaluating && <ChevronRight className="w-4 h-4 ml-1" />}
+              {evaluating ? "Evaluating..." : generatingFollowUp ? "Generating..." : currentIdx === questions.length - 1 ? "Finish Interview" : "Submit Answer"} 
+              {!evaluating && !generatingFollowUp && <ChevronRight className="w-4 h-4 ml-1" />}
             </Button>
           </div>
         </GlassPanel>
       )}
 
       {completed && feedback && (
-        <GlassPanel className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl">
-              <CheckCircle2 className="w-6 h-6" />
+        <GlassPanel className="space-y-8 p-8">
+          <div className="flex flex-col md:flex-row items-center gap-6 pb-6 border-b border-white/5">
+            <div className="w-24 h-24 rounded-full border-4 border-blue-500/30 flex items-center justify-center bg-blue-500/10 shadow-[0_0_30px_rgba(59,130,246,0.2)]">
+              <span className="text-4xl font-extrabold text-blue-400">{feedback.overallScore}</span>
             </div>
-            <div>
-              <h2 className="text-xl font-bold">Interview Completed!</h2>
-              <p className="text-xs text-neutral-400">Here is your performance feedback summary.</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-2">
-            <div className="p-4 bg-white/5 border border-white/5 rounded-xl text-center">
-              <span className="block text-xs text-neutral-400 mb-1">Overall Score</span>
-              <span className="text-3xl font-extrabold text-blue-400">{feedback.score}%</span>
-            </div>
-            <div className="p-4 bg-white/5 border border-white/5 rounded-xl text-center col-span-2">
-              <span className="block text-xs text-neutral-400 mb-1">Mode Practiced</span>
-              <span className="text-3xl font-extrabold text-white uppercase tracking-wider">{mode}</span>
+            <div className="text-center md:text-left space-y-2 flex-1">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2 justify-center md:justify-start">
+                <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                Interview Completed
+              </h2>
+              <p className="text-sm text-neutral-300 leading-relaxed max-w-xl">
+                {feedback.review}
+              </p>
             </div>
           </div>
 
-          <div className="p-4 bg-white/5 border border-white/5 rounded-xl space-y-2">
-            <h3 className="text-sm font-semibold text-white">Detailed Evaluation</h3>
-            <p className="text-sm text-neutral-300 leading-relaxed">{feedback.review}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-neutral-400">Core Metrics</h3>
+              <div className="space-y-5 p-5 bg-white/5 border border-white/5 rounded-2xl shadow-inner">
+                <MetricBar label="Vocabulary & Professionalism" score={feedback.metrics.vocabulary} />
+                <MetricBar label="Confidence & Delivery" score={feedback.metrics.confidence} />
+                <MetricBar label="Grammar & Structure" score={feedback.metrics.grammar} />
+                <MetricBar label="Logical Reasoning" score={feedback.metrics.logic} />
+                <MetricBar label="Hireability Probability" score={feedback.metrics.hireability} />
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-neutral-400">Interview Transcript</h3>
+              <div className="p-5 bg-black/40 border border-white/5 rounded-2xl max-h-[300px] overflow-y-auto space-y-6 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                {transcript.map((entry, idx) => (
+                  <div key={idx} className="space-y-2 text-xs">
+                    <div className="text-blue-400 font-medium leading-relaxed bg-blue-500/10 p-3 rounded-tr-xl rounded-bl-xl rounded-br-xl border border-blue-500/10">
+                      Q: {entry.question}
+                    </div>
+                    <div className="text-neutral-300 pl-4 border-l-2 border-white/10 ml-2 py-1 leading-relaxed">
+                      A: {entry.answer}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
-          <div className="flex justify-start">
-            <Button onClick={restart} variant="secondary" className="rounded-xl">
-              <RotateCcw className="w-4 h-4 mr-2" /> Start Over
+          <div className="flex justify-center pt-4">
+            <Button onClick={restart} variant="primary" className="rounded-xl px-8 shadow-lg shadow-blue-500/20">
+              <RotateCcw className="w-4 h-4 mr-2" /> Start Another Interview
             </Button>
           </div>
         </GlassPanel>
+      )}
+
+      {/* History Slide-Out Panel */}
+      {showHistory && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowHistory(false)} />
+          <div className="relative w-full max-w-xl bg-[#111] border-l border-white/10 h-full overflow-y-auto shadow-2xl p-6 flex flex-col transform transition-transform animate-in slide-in-from-right duration-300">
+            <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <History className="w-5 h-5 text-blue-500" /> Interview History
+              </h2>
+              <button onClick={() => { setShowHistory(false); setSelectedHistory(null); }} className="p-2 text-neutral-400 hover:text-white rounded-full hover:bg-white/5">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {selectedHistory ? (
+              <div className="space-y-6">
+                <button onClick={() => setSelectedHistory(null)} className="text-xs text-neutral-400 hover:text-white flex items-center gap-1 mb-2">
+                  <RotateCcw className="w-3 h-3" /> Back to list
+                </button>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{selectedHistory.topic}</h3>
+                    <p className="text-xs text-neutral-400">{new Date(selectedHistory.created_at).toLocaleString()}</p>
+                  </div>
+                  <div className="text-2xl font-bold text-blue-400">{selectedHistory.overall_score}</div>
+                </div>
+                
+                <div className="space-y-4 p-4 bg-white/5 rounded-xl">
+                  <MetricBar label="Vocabulary" score={selectedHistory.metrics.vocabulary} />
+                  <MetricBar label="Confidence" score={selectedHistory.metrics.confidence} />
+                  <MetricBar label="Grammar" score={selectedHistory.metrics.grammar} />
+                  <MetricBar label="Logic" score={selectedHistory.metrics.logic} />
+                  <MetricBar label="Hireability" score={selectedHistory.metrics.hireability} />
+                </div>
+
+                <div className="space-y-4 mt-6">
+                  <h4 className="text-sm font-semibold text-neutral-300">Transcript</h4>
+                  {selectedHistory.transcript.map((entry: any, i: number) => (
+                    <div key={i} className="space-y-2 text-xs bg-black/40 p-4 rounded-xl border border-white/5">
+                      <p className="text-blue-400 font-medium">Q: {entry.question}</p>
+                      <p className="text-neutral-300">A: {entry.answer}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {loadingHistory ? (
+                  <div className="text-center text-neutral-500 py-8 flex flex-col items-center">
+                    <Loader2 className="w-6 h-6 animate-spin mb-2" />
+                    Loading history...
+                  </div>
+                ) : historyItems.length === 0 ? (
+                  <div className="text-center text-neutral-500 py-8">
+                    No interviews found. Complete one to see it here!
+                  </div>
+                ) : (
+                  historyItems.map((item) => (
+                    <div 
+                      key={item.id} 
+                      onClick={() => setSelectedHistory(item)}
+                      className="p-4 bg-white/5 border border-white/5 hover:border-white/20 rounded-xl cursor-pointer transition-all hover:bg-white/10 group"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h4 className="font-bold text-white group-hover:text-blue-400 transition-colors">{item.topic}</h4>
+                          <p className="text-xs text-neutral-400 mt-1">{new Date(item.created_at).toLocaleDateString()} • {item.mode} mode • {item.num_questions} Qs</p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xl font-bold text-blue-400">{item.overall_score}</span>
+                          <span className="text-[10px] block text-neutral-500">SCORE</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
