@@ -61,11 +61,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {navItems.map((item) => {
             const isActive = pathname === item.href
             return (
-              <Link
+              <button
                 key={item.name}
-                href={item.href}
+                onClick={() => {
+                  router.push(item.href)
+                  router.refresh()
+                }}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group",
+                  "flex items-center gap-3 px-3 py-2.5 w-full text-left rounded-lg text-sm font-medium transition-all duration-200 group",
                   isActive 
                     ? "bg-white/10 text-white" 
                     : "text-neutral-400 hover:bg-white/5 hover:text-white"
@@ -76,7 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   isActive ? "text-blue-400" : "text-neutral-500 group-hover:text-neutral-300"
                 )} />
                 {item.name}
-              </Link>
+              </button>
             )
           })}
         </nav>

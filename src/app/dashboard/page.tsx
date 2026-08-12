@@ -1,46 +1,112 @@
 "use client"
 
+import * as React from "react"
 import { FadeIn } from "@/components/animations/FadeIn"
 import { GlassPanel } from "@/components/ui/GlassPanel"
 import { Activity, Clock, CheckCircle2, Zap } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { Greeting } from "@/components/dashboard/Greeting"
 
 export default function DashboardHome() {
+  const [session, setSession] = React.useState<any>(null)
+  const [stats, setStats] = React.useState({ chats: 0, interviews: 0, resumes: 0, hoursSpent: 0 })
+  const [recentChats, setRecentChats] = React.useState<any[]>([])
+  const [newsArticles, setNewsArticles] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    async function loadData() {
+      const { data: { session } } = await supabase.auth.getSession()
+      setSession(session)
+
+      if (session?.user) {
+        const [chatsCount, interviewsCount, resumesCount, profileData, recentChatsData] = await Promise.all([
+          supabase.from('chats').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id),
+          supabase.from('interviews').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id),
+          supabase.from('resumes').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id),
+          (supabase.from('profiles').select('total_chats_created, time_spent_seconds').eq('id', session.user.id).single() as any),
+          supabase.from('chats').select('id, title, updated_at').eq('user_id', session.user.id).order('updated_at', { ascending: false }).limit(5)
+        ])
+        
+        let actualChatsInDB = chatsCount.count || 0
+        let profileChatCount = profileData.data?.total_chats_created || 0
+        let timeSpentSeconds = profileData.data?.time_spent_seconds || 0
+
+        if (profileData.error && profileData.error.code === 'PGRST116') {
+          // Profile doesn't exist, create it
+          const { data: newProfile } = await supabase.from('profiles').insert({ id: session.user.id, total_chats_created: actualChatsInDB, time_spent_seconds: 0 }).select().single()
+          if (newProfile) {
+            profileChatCount = newProfile.total_chats_created
+            timeSpentSeconds = newProfile.time_spent_seconds
+          }
+        }
+
+        const allTimeChats = Math.max(actualChatsInDB, profileChatCount)
+
+        setStats({
+          chats: allTimeChats,
+          interviews: interviewsCount.count || 0,
+          resumes: resumesCount.count || 0,
+          hoursSpent: Number((timeSpentSeconds / 3600).toFixed(1)),
+        })
+
+        if (recentChatsData.data) {
+          setRecentChats(recentChatsData.data)
+        }
+      }
+
+      try {
+        const res = await fetch("https://dev.to/api/articles?tag=ai&per_page=3")
+        if (res.ok) {
+          const articles = await res.json()
+          setNewsArticles(articles)
+        }
+      } catch (err) {
+        console.error("Failed to fetch AI news:", err)
+      }
+
+      setLoading(false)
+    }
+
+    loadData()
+  }, [])
+
   return (
     <div className="p-8 pb-20 max-w-7xl mx-auto space-y-8">
       <header className="flex justify-between items-end">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Good evening, Alex.</h1>
+          <Greeting />
           <p className="text-neutral-400 mt-1">Here's a summary of your AI workspace.</p>
-        </div>
-        <div className="flex gap-2">
-          {/* Top right actions could go here */}
         </div>
       </header>
 
       {/* Top Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Active Projects" value="4" icon={<Activity />} delay={0.1} />
-        <StatCard title="Focus Hours" value="12.5h" icon={<Clock />} delay={0.2} />
-        <StatCard title="Tasks Completed" value="28" icon={<CheckCircle2 />} delay={0.3} />
-        <StatCard title="AI Interactions" value="1,204" icon={<Zap />} delay={0.4} />
+        <StatCard title="All-Time Chats" value={loading ? "..." : stats.chats.toString()} icon={<Activity />} delay={0.1} />
+        <StatCard title="Interviews Conducted" value={loading ? "..." : stats.interviews.toString()} icon={<CheckCircle2 />} delay={0.2} />
+        <StatCard title="Resumes Generated" value={loading ? "..." : stats.resumes.toString()} icon={<Zap />} delay={0.3} />
+        <StatCard title="Hours Spent" value={loading ? "..." : stats.hoursSpent.toString()} icon={<Clock />} delay={0.4} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Chart Area */}
+        {/* Main Chart Area - Replaced with Real Recent Activity */}
         <div className="lg:col-span-2">
           <FadeIn delay={0.5} className="h-full">
             <GlassPanel className="h-full min-h-[300px] flex flex-col">
-              <h3 className="text-lg font-semibold mb-4">Activity Overview</h3>
-              {/* Mock Graph using pure CSS/divs to represent a bar chart for premium feel */}
-              <div className="flex-1 flex items-end gap-2 mt-4 pt-4 border-t border-white/5">
-                {[40, 70, 45, 90, 65, 85, 100, 50, 75, 60].map((h, i) => (
-                  <div key={i} className="flex-1 bg-white/5 rounded-t-sm hover:bg-blue-500/50 transition-colors relative group">
-                    <div 
-                      className="absolute bottom-0 w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-sm transition-all duration-500 group-hover:from-blue-400 group-hover:to-blue-300" 
-                      style={{ height: `${h}%` }}
-                    />
-                  </div>
-                ))}
+              <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
+              <div className="flex-1 flex flex-col gap-3 mt-4 pt-4 border-t border-white/5">
+                {recentChats.length === 0 ? (
+                  <p className="text-sm text-neutral-500">No recent activity found.</p>
+                ) : (
+                  recentChats.map((chat, i) => (
+                    <div key={i} className="flex justify-between items-center p-4 bg-white/5 rounded-lg border border-white/5">
+                      <span className="font-medium text-sm text-neutral-200">{chat.title}</span>
+                      <span className="text-xs text-neutral-500">
+                        {new Date(chat.updated_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </GlassPanel>
           </FadeIn>
@@ -50,30 +116,20 @@ export default function DashboardHome() {
         <div className="space-y-6">
           <FadeIn delay={0.6}>
             <GlassPanel tilt>
-              <h3 className="text-lg font-semibold mb-4">AI Suggestions</h3>
+              <h3 className="text-lg font-semibold mb-4">Latest AI News</h3>
               <ul className="space-y-3">
-                <li className="p-3 bg-white/5 rounded-lg border border-white/5 hover:border-white/20 transition-colors cursor-pointer text-sm">
-                  <span className="block text-purple-400 font-medium mb-1">Coding Mentor</span>
-                  Refactor the user authentication flow for better performance.
-                </li>
-                <li className="p-3 bg-white/5 rounded-lg border border-white/5 hover:border-white/20 transition-colors cursor-pointer text-sm">
-                  <span className="block text-blue-400 font-medium mb-1">Interview Prep</span>
-                  Schedule a mock system design interview.
-                </li>
-              </ul>
-            </GlassPanel>
-          </FadeIn>
-
-          <FadeIn delay={0.7}>
-            <GlassPanel tilt>
-              <h3 className="text-lg font-semibold mb-4">Upcoming Tasks</h3>
-              <ul className="space-y-2">
-                {["Review React Compiler docs", "Update resume with new skills", "Weekly sync"].map((task, i) => (
-                  <li key={i} className="flex items-center gap-3 text-sm text-neutral-300">
-                    <div className="w-4 h-4 rounded-full border border-neutral-600" />
-                    {task}
-                  </li>
-                ))}
+                {newsArticles.length > 0 ? (
+                  newsArticles.map((article: any, i: number) => (
+                    <li key={i} className="p-3 bg-white/5 rounded-lg border border-white/5 hover:border-white/20 transition-colors cursor-pointer text-sm">
+                      <a href={article.url} target="_blank" rel="noreferrer" className="block w-full h-full">
+                        <span className="block text-purple-400 font-medium mb-1 line-clamp-1">{article.title}</span>
+                        <span className="text-neutral-400 text-xs line-clamp-2">{article.description}</span>
+                      </a>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-sm text-neutral-400">Loading latest news...</li>
+                )}
               </ul>
             </GlassPanel>
           </FadeIn>
