@@ -4,6 +4,7 @@ import * as React from "react"
 import { Button } from "@/components/ui/Button"
 import { GlassPanel } from "@/components/ui/GlassPanel"
 import { Search, BookOpen, Quote, ExternalLink, Activity } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
 export default function ResearchPage() {
   const [query, setQuery] = React.useState("")
@@ -30,6 +31,16 @@ export default function ResearchPage() {
       if (res.ok) {
         setResults(data.results)
         setHasMore(data.results.length === 10) // openalex gives 10 per page
+        
+        // Save to DB
+        const { data: sessionData } = await supabase.auth.getSession()
+        if (sessionData.session?.user) {
+          await supabase.from("research_queries").insert({
+            user_id: sessionData.session.user.id,
+            query: query,
+            results: data.results.slice(0, 5) // store top 5 in db for brevity
+          })
+        }
       } else {
         console.error(data.error)
       }

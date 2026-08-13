@@ -11,6 +11,7 @@ export default function DashboardHome() {
   const [session, setSession] = React.useState<any>(null)
   const [stats, setStats] = React.useState({ chats: 0, interviews: 0, resumes: 0, hoursSpent: 0 })
   const [recentChats, setRecentChats] = React.useState<any[]>([])
+  const [recentActivity, setRecentActivity] = React.useState<any[]>([])
   const [newsArticles, setNewsArticles] = React.useState<any[]>([])
   const [loading, setLoading] = React.useState(true)
 
@@ -20,12 +21,15 @@ export default function DashboardHome() {
       setSession(session)
 
       if (session?.user) {
-        const [chatsCount, interviewsCount, resumesCount, profileData, recentChatsData] = await Promise.all([
+        const [chatsCount, interviewsCount, resumesCount, profileData, recentChatsData, recentInterviewsData, recentResumesData, recentResearchData] = await Promise.all([
           supabase.from('chats').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id),
           supabase.from('interviews').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id),
           supabase.from('resumes').select('id', { count: 'exact', head: true }).eq('user_id', session.user.id),
           (supabase.from('profiles').select('total_chats_created, total_interviews, time_spent_seconds').eq('id', session.user.id).single() as any),
-          supabase.from('chats').select('id, title, updated_at').eq('user_id', session.user.id).order('updated_at', { ascending: false }).limit(5)
+          supabase.from('chats').select('id, title, updated_at').eq('user_id', session.user.id).order('updated_at', { ascending: false }).limit(5),
+          supabase.from('interviews').select('id, role_title, created_at').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(5),
+          supabase.from('resumes').select('id, filename, created_at').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(5),
+          supabase.from('research_queries').select('id, query, created_at').eq('user_id', session.user.id).order('created_at', { ascending: false }).limit(5)
         ])
         
         let actualChatsInDB = chatsCount.count || 0
@@ -52,9 +56,14 @@ export default function DashboardHome() {
           hoursSpent: Number((timeSpentSeconds / 3600).toFixed(1)),
         })
 
-        if (recentChatsData.data) {
-          setRecentChats(recentChatsData.data)
-        }
+        const allActivities = [
+          ...(recentChatsData.data || []).map((c: any) => ({ title: c.title, type: 'Chat', date: c.updated_at })),
+          ...(recentInterviewsData.data || []).map((i: any) => ({ title: i.role_title, type: 'Interview', date: i.created_at })),
+          ...(recentResumesData.data || []).map((r: any) => ({ title: r.filename, type: 'Resume', date: r.created_at })),
+          ...(recentResearchData.data || []).map((q: any) => ({ title: q.query, type: 'Research', date: q.created_at })),
+        ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10)
+
+        setRecentActivity(allActivities)
       }
 
       try {
@@ -86,7 +95,7 @@ export default function DashboardHome() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="All-Time Chats" value={loading ? "..." : stats.chats.toString()} icon={<Activity />} delay={0.1} />
         <StatCard title="Interviews Conducted" value={loading ? "..." : stats.interviews.toString()} icon={<CheckCircle2 />} delay={0.2} />
-        <StatCard title="Resumes Generated" value={loading ? "..." : stats.resumes.toString()} icon={<Zap />} delay={0.3} />
+        <StatCard title="Resumes Analyzed" value={loading ? "..." : stats.resumes.toString()} icon={<Zap />} delay={0.3} />
         <StatCard title="Hours Spent" value={loading ? "..." : stats.hoursSpent.toString()} icon={<Clock />} delay={0.4} />
       </div>
 
@@ -97,14 +106,17 @@ export default function DashboardHome() {
             <GlassPanel className="h-full min-h-[300px] flex flex-col">
               <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
               <div className="flex-1 flex flex-col gap-3 mt-4 pt-4 border-t border-white/5">
-                {recentChats.length === 0 ? (
+                {recentActivity.length === 0 ? (
                   <p className="text-sm text-neutral-500">No recent activity found.</p>
                 ) : (
-                  recentChats.map((chat, i) => (
+                  recentActivity.map((activity, i) => (
                     <div key={i} className="flex justify-between items-center p-4 bg-white/5 rounded-lg border border-white/5">
-                      <span className="font-medium text-sm text-neutral-200">{chat.title}</span>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-sm text-neutral-200">{activity.title}</span>
+                        <span className="text-xs text-neutral-500 mt-1">{activity.type}</span>
+                      </div>
                       <span className="text-xs text-neutral-500">
-                        {new Date(chat.updated_at).toLocaleDateString()}
+                        {new Date(activity.date).toLocaleDateString()}
                       </span>
                     </div>
                   ))

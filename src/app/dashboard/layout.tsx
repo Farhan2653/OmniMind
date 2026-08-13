@@ -17,8 +17,8 @@ const navItems = [
   { name: "Coding", href: "/dashboard/coding", icon: Code },
   { name: "Research", href: "/dashboard/research", icon: BookOpen },
   { name: "Resume", href: "/dashboard/resume", icon: FileText },
-  { name: "Projects", href: "/dashboard/projects", icon: FolderKanban },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+  { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

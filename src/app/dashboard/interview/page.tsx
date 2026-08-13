@@ -295,12 +295,11 @@ export default function InterviewPage() {
         if (session?.user && data.overallScore) {
           const { error: insertError } = await supabase.from('interviews').insert({
             user_id: session.user.id,
-            topic: topic,
-            mode: mode,
-            num_questions: questions.length,
-            overall_score: data.overallScore,
-            metrics: data.metrics,
-            transcript: updatedTranscript
+            role_title: topic,
+            score: data.overallScore,
+            feedback: JSON.stringify({ review: data.review, metrics: data.metrics }),
+            transcript: updatedTranscript,
+            status: 'completed'
           })
           if (insertError) {
             console.error("Supabase Insert Error:", insertError);

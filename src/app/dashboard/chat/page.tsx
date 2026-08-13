@@ -283,15 +283,22 @@ export default function ChatPage() {
 
         {/* Input Row */}
         <form onSubmit={handleSend} className="flex gap-2 relative">
-          <input
-            type="text"
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Send a message to OmniMind..."
-            className="flex-1 px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all text-sm shadow-xl"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend(e);
+              }
+            }}
+            placeholder="Send a message to OmniMind... (Press Enter to send, Shift+Enter for new line)"
+            rows={1}
+            style={{ minHeight: '52px', maxHeight: '150px' }}
+            className="flex-1 pl-5 pr-24 py-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all text-sm shadow-xl resize-none no-scrollbar leading-relaxed"
             disabled={!user}
           />
-          <Button type="submit" variant="primary" className="absolute right-2 top-2 bottom-2 rounded-xl px-6" disabled={!user || loading}>
+          <Button type="submit" variant="primary" className="absolute right-2 top-2 bottom-2 rounded-xl px-6" disabled={!user || loading || !input.trim()}>
             <Send className="w-4 h-4" />
           </Button>
         </form>

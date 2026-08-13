@@ -5,6 +5,7 @@ import * as React from "react"
 import { GlassPanel } from "@/components/ui/GlassPanel"
 import { Button } from "@/components/ui/Button"
 import { Code2, Play, CheckCircle2, Clock, HardDrive, AlertTriangle, ExternalLink, Loader2 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
 interface RelatedProblem {
   name: string
@@ -109,6 +110,16 @@ export default function CodingPage() {
       }
 
       const data = await res.json()
+      
+      // Save to DB
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (sessionData.session?.user) {
+        await supabase.from("chats").insert({
+          user_id: sessionData.session.user.id,
+          title: `Coding Analysis - ${language}`
+        })
+      }
+
       setResult(data)
     } catch (err: any) {
       setError(err.message)
