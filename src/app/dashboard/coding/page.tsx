@@ -1,167 +1,247 @@
 "use client"
 
 import * as React from "react"
-import { Button } from "@/components/ui/Button"
+
 import { GlassPanel } from "@/components/ui/GlassPanel"
-import { Code2, Play, Terminal, Cpu } from "lucide-react"
+import { Button } from "@/components/ui/Button"
+import { Code2, Play, CheckCircle2, Clock, HardDrive, AlertTriangle, ExternalLink, Loader2 } from "lucide-react"
 
-type Language = "javascript" | "python" | "cpp" | "csharp" | "c"
-
-interface CodeTemplate {
-  filename: string;
-  code: string;
+interface RelatedProblem {
+  name: string
+  platform: string
+  url: string
 }
 
-const templates: Record<Language, CodeTemplate> = {
-  javascript: {
-    filename: "main.js",
-    code: `// JavaScript Code Optimization
-function optimizeCode(data) {
-  return data.map(item => ({
-    ...item,
-    processed: true
-  }));
-}`
-  },
-  python: {
-    filename: "main.py",
-    code: `# Python Optimization Template
-def calculate_factorial(n):
-    if n == 0 or n == 1:
-        return 1
-    return n * calculate_factorial(n - 1)
-`
-  },
-  cpp: {
-    filename: "main.cpp",
-    code: `// C++ Memory Allocation Review
-#include <iostream>
-#include <vector>
+interface AnalysisResult {
+  timeComplexity: string
+  spaceComplexity: string
+  optimizationDetails: string
+  isOptimized: boolean
+  relatedProblems: RelatedProblem[]
+}
 
-void processElements() {
-    std::vector<int> vec = {1, 2, 3, 4, 5};
-    for(int val : vec) {
-        std::cout << val << std::endl;
-    }
-}`
-  },
-  csharp: {
-    filename: "Program.cs",
-    code: `// C# LINQ & Threading Template
-using System;
-using System.Linq;
-
-class Program {
-    static void Main() {
-        int[] numbers = { 1, 2, 3, 4, 5 };
-        var evens = numbers.Where(n => n % 2 == 0);
-    }
-}`
-  },
-  c: {
-    filename: "main.c",
-    code: `/* C Pointer & Allocation Optimization */
-#include <stdio.h>
-#include <stdlib.h>
-
-int main() {
-    int *arr = (int*)malloc(5 * sizeof(int));
-    if (arr == NULL) return 1;
-    free(arr);
-    return 0;
-}`
-  }
+const languageBoilerplates: Record<string, string> = {
+  javascript: "// Write your algorithm here...\n\nfunction solve(arr) {\n  \n}",
+  python: "# Write your algorithm here...\n\ndef solve(arr):\n    pass",
+  cpp: "// Write your algorithm here...\n#include <iostream>\n#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    void solve(vector<int>& arr) {\n        \n    }\n};",
+  java: "// Write your algorithm here...\nimport java.util.*;\n\nclass Solution {\n    public void solve(int[] arr) {\n        \n    }\n}"
 }
 
 export default function CodingPage() {
-  const [lang, setLang] = React.useState<Language>("javascript")
-  const [code, setCode] = React.useState(templates.javascript.code)
-  const [filename, setFilename] = React.useState(templates.javascript.filename)
-  const [output, setOutput] = React.useState("Terminal ready. Press 'Run Analysis' to evaluate code optimization.")
-  const [loading, setLoading] = React.useState(false)
+  const [code, setCode] = React.useState(languageBoilerplates.javascript)
+  const [language, setLanguage] = React.useState("javascript")
+  const [analyzing, setAnalyzing] = React.useState(false)
+  const [result, setResult] = React.useState<AnalysisResult | null>(null)
+  const [error, setError] = React.useState("")
 
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selected = e.target.value as Language
-    setLang(selected)
-    setCode(templates[selected].code)
-    setFilename(templates[selected].filename)
-    setOutput(`Terminal switched to ${selected.toUpperCase()}. Press 'Run Analysis'.`)
+    const newLang = e.target.value
+    setLanguage(newLang)
+    
+    const isBoilerplate = Object.values(languageBoilerplates).includes(code)
+    if (isBoilerplate || code.trim() === "") {
+      setCode(languageBoilerplates[newLang])
+    } else {
+      if (window.confirm("Changing language will replace your current code. Are you sure?")) {
+        setCode(languageBoilerplates[newLang])
+      }
+    }
   }
 
-  const handleRun = () => {
-    setLoading(true)
-    setOutput(`[COMPILER] Initiating AST check for ${filename}...\nProcessing optimization rules...`)
-    
-    setTimeout(() => {
-      setLoading(false)
-      let customOutput = ""
-      if (lang === "javascript") {
-        customOutput = `[OPTIMIZER] JavaScript Complete\n- Time Complexity: O(n)\n- Memory Footprint: Standard\n- Recommendation: Replace array spread with Object.assign inside loops to improve speed.`
-      } else if (lang === "python") {
-        customOutput = `[OPTIMIZER] Python Complete\n- Time Complexity: O(n) (recursion)\n- Recursion Depth Check: Alert (Potential StackOverflow for n > 999)\n- Recommendation: Refactor with tail recursion or iteration to support large inputs.`
-      } else if (lang === "cpp") {
-        customOutput = `[OPTIMIZER] C++ Complete\n- Loop Check: Pass\n- Optimization: Vector elements are copied inside range loop.\n- Recommendation: Use 'const auto&' in loop to avoid element copying.`
-      } else if (lang === "csharp") {
-        customOutput = `[OPTIMIZER] C# Complete\n- Memory Check: Pass\n- recommendation: Avoid calling .ToList() multiple times on deferred LINQ queries.`
-      } else if (lang === "c") {
-        customOutput = `[OPTIMIZER] C Complete\n- Memory Check: Safe\n- Warning: Free verification executed successfully.\n- recommendation: Ensure all pointers are set to NULL immediately after freeing memory.`
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const target = e.target as HTMLTextAreaElement
+    const start = target.selectionStart
+    const end = target.selectionEnd
+    const value = target.value
+
+    const pairs: Record<string, string> = {
+      '{': '}',
+      '(': ')',
+      '[': ']',
+      '"': '"',
+      "'": "'"
+    }
+
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      const newValue = value.substring(0, start) + "  " + value.substring(end)
+      setCode(newValue)
+      setTimeout(() => { target.selectionStart = target.selectionEnd = start + 2 }, 0)
+    } else if (pairs[e.key]) {
+      e.preventDefault()
+      const newValue = value.substring(0, start) + e.key + pairs[e.key] + value.substring(end)
+      setCode(newValue)
+      setTimeout(() => { target.selectionStart = target.selectionEnd = start + 1 }, 0)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const lineStart = value.lastIndexOf('\n', start - 1) + 1
+      const currentLine = value.substring(lineStart, start)
+      const match = currentLine.match(/^\s*/)
+      const indent = match ? match[0] : ""
+
+      if (value[start - 1] === '{' && value[start] === '}') {
+        const newValue = value.substring(0, start) + "\n" + indent + "  " + "\n" + indent + value.substring(end)
+        setCode(newValue)
+        setTimeout(() => { target.selectionStart = target.selectionEnd = start + indent.length + 3 }, 0)
+      } else {
+        const newValue = value.substring(0, start) + "\n" + indent + value.substring(end)
+        setCode(newValue)
+        setTimeout(() => { target.selectionStart = target.selectionEnd = start + indent.length + 1 }, 0)
       }
-      setOutput(customOutput)
-    }, 1200)
+    }
+  }
+
+  const handleAnalyze = async () => {
+    if (!code.trim()) return
+    setAnalyzing(true)
+    setError("")
+    setResult(null)
+
+    try {
+      const res = await fetch("/api/coding/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, language })
+      })
+
+      if (!res.ok) {
+        throw new Error("Failed to analyze code")
+      }
+
+      const data = await res.json()
+      setResult(data)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setAnalyzing(false)
+    }
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">AI Coding Mentor</h1>
-          <p className="text-xs text-neutral-400">Review your files, optimize structures, and write tests side-by-side.</p>
+    <div className="min-h-screen pt-24 pb-12 px-6 flex flex-col items-center">
+      <div className="w-full max-w-6xl space-y-6">
+        
+        <div className="flex justify-between items-end">
+          <div>
+            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+              <Code2 className="w-8 h-8 text-blue-500" /> AI Coding Mentor
+            </h1>
+            <p className="text-neutral-400 mt-2">Write code, analyze complexity, and get optimization tips.</p>
+          </div>
+          <Button onClick={handleAnalyze} disabled={analyzing} className="flex items-center gap-2 px-6">
+            {analyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            {analyzing ? "Analyzing..." : "Analyze Code"}
+          </Button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-neutral-400 font-medium">Language:</label>
-          <select
-            value={lang}
-            onChange={handleLanguageChange}
-            className="px-3 py-1.5 bg-neutral-900 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:ring-1 focus:ring-purple-500/50"
-          >
-            <option value="javascript">JavaScript</option>
-            <option value="python">Python</option>
-            <option value="cpp">C++</option>
-            <option value="csharp">C#</option>
-            <option value="c">C</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <GlassPanel className="p-4 space-y-4 border border-white/5">
-            <div className="flex justify-between items-center pb-2 border-b border-white/5">
-              <span className="text-xs font-semibold text-neutral-400 flex items-center gap-1.5">
-                <Code2 className="w-4 h-4 text-purple-400" /> {filename}
-              </span>
-              <Button onClick={handleRun} variant="primary" size="sm" className="rounded-lg text-xs" disabled={loading}>
-                <Play className="w-3 h-3 mr-1" /> {loading ? "Analyzing..." : "Run Analysis"}
-              </Button>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[600px]">
+          {/* Editor Panel */}
+          <GlassPanel className="p-0 overflow-hidden flex flex-col h-full border border-white/10 rounded-2xl">
+            <div className="px-4 py-3 bg-black/40 border-b border-white/5 flex justify-between items-center">
+              <div className="flex gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
+              </div>
+              <select 
+                value={language}
+                onChange={handleLanguageChange}
+                className="bg-transparent text-sm text-neutral-300 font-medium focus:outline-none cursor-pointer"
+              >
+                <option value="javascript">JavaScript</option>
+                <option value="python">Python</option>
+                <option value="cpp">C++</option>
+                <option value="java">Java</option>
+              </select>
             </div>
-            <textarea
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              rows={14}
-              className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-xs font-mono text-neutral-300 focus:outline-none focus:ring-1 focus:ring-purple-500/50 no-scrollbar"
-            />
+            <div className="flex-1 p-4 flex flex-col min-h-[450px]">
+              <textarea
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="flex-1 w-full bg-transparent text-neutral-200 font-mono text-[15px] leading-relaxed resize-none focus:outline-none"
+                spellCheck={false}
+              />
+            </div>
           </GlassPanel>
-        </div>
 
-        <div>
-          <GlassPanel className="p-4 space-y-4 border border-white/5 h-full min-h-[250px] flex flex-col">
-            <span className="text-xs font-semibold text-neutral-400 flex items-center gap-1.5 pb-2 border-b border-white/5">
-              <Terminal className="w-4 h-4 text-blue-400" /> Output Terminal
-            </span>
-            <pre className="flex-1 bg-black/40 p-3 rounded-lg border border-white/5 text-[10px] font-mono text-emerald-400 whitespace-pre-wrap">
-              {output}
-            </pre>
+          {/* Results Panel */}
+          <GlassPanel className="p-6 h-full overflow-y-auto flex flex-col border border-white/10 rounded-2xl">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6">
+                {error}
+              </div>
+            )}
+            
+            {!result && !analyzing && !error && (
+              <div className="flex-1 flex flex-col items-center justify-center text-neutral-500">
+                <Code2 className="w-12 h-12 mb-4 opacity-20" />
+                <p>Run analysis to see time and space complexity.</p>
+              </div>
+            )}
+
+            {analyzing && (
+              <div className="flex-1 flex flex-col items-center justify-center text-neutral-400">
+                <Loader2 className="w-10 h-10 animate-spin mb-4 text-blue-500" />
+                <p className="animate-pulse">Evaluating algorithm...</p>
+              </div>
+            )}
+
+            {result && !analyzing && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                
+                {/* Complexity Cards */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-black/40 border border-white/5 p-4 rounded-xl">
+                    <div className="flex items-center gap-2 text-neutral-400 mb-2">
+                      <Clock className="w-4 h-4 text-orange-400" /> Time Complexity
+                    </div>
+                    <div className="text-2xl font-mono text-white">{result.timeComplexity}</div>
+                  </div>
+                  <div className="bg-black/40 border border-white/5 p-4 rounded-xl">
+                    <div className="flex items-center gap-2 text-neutral-400 mb-2">
+                      <HardDrive className="w-4 h-4 text-purple-400" /> Space Complexity
+                    </div>
+                    <div className="text-2xl font-mono text-white">{result.spaceComplexity}</div>
+                  </div>
+                </div>
+
+                {/* Optimization Status */}
+                <div className={`p-4 rounded-xl border flex items-start gap-3 ${result.isOptimized ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'}`}>
+                  {result.isOptimized ? <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0" /> : <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />}
+                  <div>
+                    <h3 className="font-bold mb-1">{result.isOptimized ? "Fully Optimized" : "Optimization Possible"}</h3>
+                    <div className="text-sm opacity-90 leading-relaxed whitespace-pre-wrap">
+                      {result.optimizationDetails}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Related Problems */}
+                {result.relatedProblems && result.relatedProblems.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-neutral-300 mb-3 uppercase tracking-wider">Related Practice Problems</h3>
+                    <div className="space-y-3">
+                      {result.relatedProblems.map((prob, i) => (
+                        <a 
+                          key={i} 
+                          href={prob.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl transition-colors group"
+                        >
+                          <div>
+                            <div className="font-medium text-blue-400 group-hover:text-blue-300 transition-colors">{prob.name}</div>
+                            <div className="text-xs text-neutral-500 mt-1">{prob.platform}</div>
+                          </div>
+                          <ExternalLink className="w-4 h-4 text-neutral-500 group-hover:text-white transition-colors" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </GlassPanel>
         </div>
       </div>
