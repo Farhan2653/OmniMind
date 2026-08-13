@@ -169,9 +169,9 @@ export default function ResumePage() {
 
                 <GlassPanel className="p-4 space-y-2">
                   <span className="text-xs text-neutral-400 font-medium">Writing & Format</span>
-                  <div className="text-2xl font-bold text-white">{results.writingScore}/100</div>
+                  <div className="text-2xl font-bold text-white">{results.presentationScore}/100</div>
                   <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-amber-400 h-full rounded-full" style={{ width: `${results.writingScore}%` }} />
+                    <div className="bg-amber-400 h-full rounded-full" style={{ width: `${results.presentationScore}%` }} />
                   </div>
                 </GlassPanel>
               </div>
