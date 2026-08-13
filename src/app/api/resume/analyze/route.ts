@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { generateText } from "ai"
 import { groq } from "@ai-sdk/groq"
+// @ts-expect-error - No type definitions available for pdf-parse/lib/pdf-parse.js
 import pdfParse from "pdf-parse/lib/pdf-parse.js"
 
 export async function POST(req: Request) {
