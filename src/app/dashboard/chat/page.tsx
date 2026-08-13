@@ -189,9 +189,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] p-4 max-w-7xl mx-auto gap-4">
+    <div className="flex h-[calc(100vh-4rem)] p-2 md:p-4 max-w-7xl mx-auto gap-4">
       {/* Left Sidebar - Chat History */}
-      <GlassPanel className="w-72 flex flex-col h-full border border-white/5 bg-neutral-950/40 p-4 hidden md:flex">
+      <GlassPanel className="w-72 flex flex-col h-full border border-white/5 bg-neutral-950/40 p-4 hidden lg:flex">
         <Button onClick={startNewChat} variant="secondary" className="w-full flex items-center justify-center mb-6">
           <Plus className="w-4 h-4 mr-2" /> New Chat
         </Button>

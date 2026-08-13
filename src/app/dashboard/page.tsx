@@ -83,7 +83,7 @@ export default function DashboardHome() {
   }, [])
 
   return (
-    <div className="p-8 pb-20 max-w-7xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 pb-24 md:pb-20 max-w-7xl mx-auto space-y-6 md:space-y-8">
       <header className="flex justify-between items-end">
         <div>
           <Greeting />

@@ -101,7 +101,7 @@ export default function AnalyticsPage() {
   }, [])
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4 md:space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-white">Analytics Hub</h1>
         <p className="text-xs text-neutral-400">Track your AI usage and evaluate your performance over time.</p>

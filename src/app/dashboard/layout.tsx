@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { supabase } from "@/lib/supabase"
 import { 
   Home, MessageSquare, Briefcase, Code, BookOpen, 
-  FileText, FolderKanban, BarChart3, Settings, LogOut, User
+  FileText, FolderKanban, BarChart3, Settings, LogOut, User, Menu, X
 } from "lucide-react"
 
 const navItems = [
@@ -25,6 +25,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const router = useRouter()
   const [user, setUser] = React.useState<any>(null)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
 
   React.useEffect(() => {
     // Check if user is logged in
@@ -39,22 +40,57 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => subscription.unsubscribe()
   }, [])
 
+  // Close mobile menu on route change
+  React.useEffect(() => {
+    setIsMobileMenuOpen(false)
+  }, [pathname])
+
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.refresh()
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#000000]">
+    <div className="flex h-[100dvh] overflow-hidden bg-[#000000] relative">
+      
+      {/* Mobile Top Bar */}
+      <div className="md:hidden absolute top-0 left-0 right-0 h-16 bg-[#050505]/90 backdrop-blur-md border-b border-white/5 z-40 flex items-center justify-between px-4">
+        <span className="text-xl font-bold tracking-tight text-white">OmniMind</span>
+        <button 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="text-white p-2 rounded-lg bg-white/5"
+        >
+          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </div>
+
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 border-r border-white/5 bg-[#050505] flex flex-col">
+      <aside className={cn(
+        "w-64 border-r border-white/5 bg-[#050505] flex flex-col fixed md:relative h-[100dvh] z-50 transition-transform duration-300 ease-in-out",
+        isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+      )}>
         <div className="h-16 flex items-center px-6 border-b border-white/5 justify-between">
-          <span className="text-xl font-bold tracking-tight">OmniMind</span>
+          <span className="text-xl font-bold tracking-tight hidden md:block">OmniMind</span>
+          <span className="text-xl font-bold tracking-tight md:hidden">Menu</span>
           {!user && (
             <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">
               Demo Account
             </span>
           )}
+          <button 
+            className="md:hidden text-neutral-400 hover:text-white"
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
         
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 no-scrollbar">
@@ -84,7 +120,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        <div className="p-4 border-t border-white/5 space-y-1">
+        <div className="p-4 border-t border-white/5 space-y-1 pb-safe">
           <Link href="/dashboard/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-neutral-400 hover:bg-white/5 hover:text-white transition-all group">
             <Settings className="w-5 h-5 text-neutral-500 group-hover:text-neutral-300" />
             Settings
@@ -116,7 +152,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto bg-[url('/grid.svg')] bg-center bg-fixed no-scrollbar">
+      <main className="flex-1 h-[100dvh] overflow-y-auto bg-[url('/grid.svg')] bg-center bg-fixed no-scrollbar relative pt-16 md:pt-0">
         <div className="h-full">
           {children}
         </div>
