@@ -17,7 +17,7 @@ Your task is to generate ONE single logical, challenging follow-up question base
 Return ONLY the question text. Do not include quotes, pleasantries, or any other formatting. Just the raw follow-up question.`;
 
     const result = await generateText({
-      model: groq('llama-3.1-8b-instant'),
+      model: groq('llama3-8b-8192'),
       prompt: prompt,
     });
 

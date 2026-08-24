@@ -26,7 +26,7 @@ You MUST output your response as valid JSON matching the following schema exactl
 DO NOT wrap the output in markdown code blocks like \`\`\`json. Return only the raw JSON.`;
 
     const result = await generateText({
-      model: groq('llama-3.1-8b-instant'),
+      model: groq('llama3-8b-8192'),
       system: systemPrompt,
       messages: [{ role: 'user', content: `Language: ${language}\n\nCode:\n${code}` }],
       temperature: 0.1,

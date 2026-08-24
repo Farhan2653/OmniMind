@@ -32,8 +32,8 @@ export async function POST(req: Request) {
 
     // Analyze the text using Groq with manual JSON parsing
     const { text: resultText } = await generateText({
-      model: groq("llama-3.1-8b-instant"),
-      prompt: `Analyze the following resume and return a JSON object with strictly these keys:
+      model: groq("llama3-8b-8192"),
+      prompt: `Analyze the following resume (first see that it it a resume or not (you can decribe the file is not resume after seeing the file first some line includes Name of a person whose resume it is and his email id if it present then it might be resume otherwise it might not) if that file is not resume then return an error message saying that "invalid resume" in the response and also the evalutation should be very strict and find each and every drawback in resume, be very critical about the resume) and return a JSON object with strictly these keys:
 - overallScore (number 0-100)
 - skillsScore (number 0-100)
 - experienceScore (number 0-100)
