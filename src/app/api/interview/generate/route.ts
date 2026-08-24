@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     `;
 
     const result = await generateText({
-      model: groq('llama3-8b-8192'),
+      model: groq('groq/compound'),
       prompt: prompt,
     });
 
