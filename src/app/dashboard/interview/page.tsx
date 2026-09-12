@@ -164,12 +164,6 @@ export default function InterviewPage() {
     }
   }
 
-  const stopTTS = () => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel()
-      setSpeaking(false)
-    }
-  }
 
   // Speak question helper
   const speakQuestion = (text: string) => {
