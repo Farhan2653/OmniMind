@@ -14,7 +14,7 @@ vi.mock('@/hooks/useAuth', () => ({
 describe('Greeting Component', () => {
   it('renders a greeting message', () => {
     render(<Greeting />)
-    const heading = screen.getByRole('heading', { level: 2 })
+    const heading = screen.getByRole('heading', { level: 1 })
     expect(heading).toBeInTheDocument()
   })
 })
