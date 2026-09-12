@@ -33,6 +33,22 @@ interface TranscriptEntry {
 
 const initialQuestions: Question[] = []
 
+// Helper to render metric progress bar
+const MetricBar = ({ label, score }: { label: string, score: number }) => (
+  <div className="space-y-1.5">
+    <div className="flex justify-between text-xs">
+      <span className="text-neutral-300">{label}</span>
+      <span className="font-bold text-white">{score}%</span>
+    </div>
+    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+      <div 
+        className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-out"
+        style={{ width: `${score}%` }}
+      />
+    </div>
+  </div>
+)
+
 export default function InterviewPage() {
   const [mode, setMode] = React.useState<InterviewMode>("text")
   const [started, setStarted] = React.useState(false)
@@ -336,21 +352,7 @@ export default function InterviewPage() {
     setFeedback(null)
   }
 
-  // Helper to render metric progress bar
-  const MetricBar = ({ label, score }: { label: string, score: number }) => (
-    <div className="space-y-1.5">
-      <div className="flex justify-between text-xs">
-        <span className="text-neutral-300">{label}</span>
-        <span className="font-bold text-white">{score}%</span>
-      </div>
-      <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-        <div 
-          className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-out"
-          style={{ width: `${score}%` }}
-        />
-      </div>
-    </div>
-  )
+
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
