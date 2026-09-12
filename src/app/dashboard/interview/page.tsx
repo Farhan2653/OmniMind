@@ -80,7 +80,7 @@ export default function InterviewPage() {
     if (showHistory && historyItems.length === 0) {
       fetchHistory()
     }
-  }, [showHistory])
+  }, [showHistory, historyItems.length])
 
   // Video Mode State
   const [recording, setRecording] = React.useState(false)
@@ -98,6 +98,13 @@ export default function InterviewPage() {
   const [numQuestions, setNumQuestions] = React.useState<number>(5)
   const [generating, setGenerating] = React.useState(false)
   const [generatingFollowUp, setGeneratingFollowUp] = React.useState(false)
+
+  const stopTTS = () => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel()
+      setSpeaking(false)
+    }
+  }
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
