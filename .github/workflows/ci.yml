@@ -1,0 +1,37 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci --legacy-peer-deps
+      
+    - name: Run Linter
+      run: npm run lint
+      
+    - name: Run Tests
+      run: npm run test
+      
+    - name: Build Next.js
+      run: npm run build
+      env:
+        # Provide dummy keys so build succeeds if any are required at build time
+        GROQ_API_KEY: 'dummy_key'
+        NEXT_PUBLIC_SUPABASE_URL: 'https://dummy.supabase.co'
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: 'dummy_key'
